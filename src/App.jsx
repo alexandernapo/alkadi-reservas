@@ -166,7 +166,7 @@ export default function App() {
       let loaded = [];
       try {
         const rows = await withRetries(() => sb("/app_data?id=eq.reservations&select=data"));
-        if (rows && rows.length > 0 && Array.isArray(rows[0].data) && rows[0].data.length > 0) {
+        if (rows && rows.length > 0 && Array.isArray(rows[0].data)) {
           loaded = rows[0].data;
         } else {
           loaded = exampleReservations();
