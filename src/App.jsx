@@ -230,6 +230,50 @@ export default function App() {
   const saveTimerRef = useRef(null);
   const latestDataRef = useRef(null);
 
+  const notifTimersRef = useRef([]);
+  const notifiedRef = useRef(new Set());
+
+  useEffect(() => {
+    if (!reservations || typeof window === "undefined" || !("Notification" in window)) return;
+
+    notifTimersRef.current.forEach((id) => clearTimeout(id));
+    notifTimersRef.current = [];
+
+    const OFFSETS = [
+      { minutes: 120, label: "en 2 horas" },
+      { minutes: 60, label: "en 1 hora" },
+      { minutes: 30, label: "en 30 minutos" },
+    ];
+    const now = Date.now();
+
+    reservations
+      .filter((r) => r.status !== "cancelada" && r.date && r.time)
+      .forEach((r) => {
+        const gameTime = new Date(`${r.date}T${r.time}:00`).getTime();
+        if (isNaN(gameTime)) return;
+        OFFSETS.forEach(({ minutes, label }) => {
+          const notifyAt = gameTime - minutes * 60000;
+          const key = `${r.id}-${minutes}`;
+          if (notifyAt > now && notifyAt - now < 1000 * 60 * 60 * 24 * 7) {
+            const id = setTimeout(() => {
+              if (notifiedRef.current.has(key)) return;
+              notifiedRef.current.add(key);
+              if (Notification.permission === "granted") {
+                new Notification("Alkadi Paintball", {
+                  body: `${r.groupName || "Reserva"} juega ${label} (${r.time})`,
+                });
+              }
+            }, notifyAt - now);
+            notifTimersRef.current.push(id);
+          }
+        });
+      });
+
+    return () => {
+      notifTimersRef.current.forEach((id) => clearTimeout(id));
+    };
+  }, [reservations]);
+
   async function doSave() {
     const next = latestDataRef.current;
     setSaving(true);
@@ -403,6 +447,14 @@ function InicioView({ setView, reservations }) {
   const hoy = reservations.filter((r) => r.date === today).length;
   const manana = reservations.filter((r) => r.date === tomorrowStr).length;
 
+  const next5Dates = [];
+  for (let i = 2; i <= 6; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    next5Dates.push(localDateStr(d));
+  }
+  const proximos5 = reservations.filter((r) => next5Dates.includes(r.date)).length;
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6 py-10 relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-b from-teal-500/10 via-transparent to-orange-600/10 pointer-events-none" />
@@ -451,7 +503,7 @@ function InicioView({ setView, reservations }) {
         />
       </div>
 
-      {(hoy > 0 || manana > 0) && (
+      {(hoy > 0 || manana > 0 || proximos5 > 0) && (
         <div className="mt-8 flex items-center gap-4 text-sm text-stone-500">
           <span>
             <span className="text-orange-600 font-bold">{hoy}</span> hoy
@@ -460,8 +512,23 @@ function InicioView({ setView, reservations }) {
           <span>
             <span className="text-teal-600 font-bold">{manana}</span> mañana
           </span>
+          <span className="w-1 h-1 rounded-full bg-stone-300" />
+          <span>
+            <span className="text-orange-600 font-bold">{proximos5}</span> próx. 5 días
+          </span>
         </div>
       )}
+
+      {typeof window !== "undefined" &&
+        "Notification" in window &&
+        Notification.permission !== "granted" && (
+          <button
+            onClick={() => Notification.requestPermission()}
+            className="mt-4 text-[12px] text-teal-600 underline"
+          >
+            Activar notificaciones de reservas
+          </button>
+        )}
     </div>
   );
 }
@@ -1428,9 +1495,9 @@ function SemanaView({ reservations, onOpen, onNewAt }) {
   const dayLabels = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 
   function shiftWeek(days) {
-    const d = new Date(anchor);
+    const d = new Date(anchor + "T00:00:00");
     d.setDate(d.getDate() + days);
-    setAnchor(d.toISOString().slice(0, 10));
+    setAnchor(localDateStr(d));
   }
 
   function findReservations(date, slot) {
