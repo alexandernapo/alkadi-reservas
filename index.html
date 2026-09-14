@@ -629,15 +629,77 @@ function InicioView({ setView, reservations }) {
 }
 
 function AyudantesView({ reservations, onAccept }) {
-  const [nombre, setNombre] = React.useState(() => localStorage.getItem('alkadi_ayudante_nombre') || '');
+  const [view, setView] = React.useState("lista"); // "lista", "perfil"
+  const [perfil, setPerfil] = React.useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('alkadi_ayudante_perfil') || '{}');
+    } catch {
+      return {};
+    }
+  });
+  const [confirmAccept, setConfirmAccept] = React.useState(null);
   
   React.useEffect(() => {
-    if (nombre) localStorage.setItem('alkadi_ayudante_nombre', nombre);
-  }, [nombre]);
+    localStorage.setItem('alkadi_ayudante_perfil', JSON.stringify(perfil));
+  }, [perfil]);
 
   const active = reservations.filter((r) => r.status !== "cancelada");
-  const today = todayStr();
   
+  if (view === "perfil") {
+    return (
+      <div className="space-y-4 pb-24">
+        <button 
+          onClick={() => setView("lista")}
+          className="flex items-center gap-1 text-teal-600 text-sm font-semibold"
+        >
+          ← Volver
+        </button>
+        <h2 className="font-black text-2xl">Mi perfil</h2>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-bold text-stone-700 mb-1">Nombre</label>
+            <input
+              type="text"
+              value={perfil.nombre || ''}
+              onChange={(e) => setPerfil({...perfil, nombre: e.target.value})}
+              className="w-full px-3 py-2 border border-stone-200 rounded-md focus:outline-none focus:border-teal-600"
+              placeholder="Tu nombre"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold text-stone-700 mb-1">Apellido</label>
+            <input
+              type="text"
+              value={perfil.apellido || ''}
+              onChange={(e) => setPerfil({...perfil, apellido: e.target.value})}
+              className="w-full px-3 py-2 border border-stone-200 rounded-md focus:outline-none focus:border-teal-600"
+              placeholder="Tu apellido"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold text-stone-700 mb-1">Fecha de cumpleaños</label>
+            <input
+              type="date"
+              value={perfil.fechaNac || ''}
+              onChange={(e) => setPerfil({...perfil, fechaNac: e.target.value})}
+              className="w-full px-3 py-2 border border-stone-200 rounded-md focus:outline-none focus:border-teal-600"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold text-stone-700 mb-1">Celular</label>
+            <input
+              type="tel"
+              value={perfil.celular || ''}
+              onChange={(e) => setPerfil({...perfil, celular: e.target.value})}
+              className="w-full px-3 py-2 border border-stone-200 rounded-md focus:outline-none focus:border-teal-600"
+              placeholder="+593 9 XXXXXXXX"
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Agrupar futuras por fecha
   const groupedByDate = {};
   active.forEach(r => {
@@ -648,23 +710,29 @@ function AyudantesView({ reservations, onAccept }) {
   });
   
   const sortedDates = Object.keys(groupedByDate).sort();
+  const nombreCompleto = perfil.nombre ? `${perfil.nombre} ${perfil.apellido || ''}`.trim() : '';
 
   return (
     <div className="space-y-6 pb-24">
-      {nombre ? (
-        <div className="bg-teal-500/10 border border-teal-500/40 rounded-lg p-3 text-center">
-          <div className="text-teal-600 font-semibold text-sm">Eres: <span className="font-bold">{nombre}</span></div>
+      {nombreCompleto ? (
+        <div className="bg-teal-500/10 border border-teal-500/40 rounded-lg p-3 flex items-center justify-between">
+          <div className="text-teal-600 font-semibold text-sm">Eres: <span className="font-bold">{nombreCompleto}</span></div>
+          <button 
+            onClick={() => setView("perfil")}
+            className="text-xs text-teal-600 underline font-semibold"
+          >
+            Editar
+          </button>
         </div>
       ) : (
         <div className="bg-orange-600/10 border border-orange-600/40 rounded-lg p-4">
-          <div className="text-orange-700 font-semibold mb-2 text-sm">Tu nombre</div>
-          <input
-            type="text"
-            placeholder="Ingresa tu nombre"
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
-            className="w-full px-3 py-2 border border-orange-600/40 rounded-md text-sm focus:outline-none focus:border-orange-600"
-          />
+          <div className="text-orange-700 font-semibold mb-3 text-sm">Completa tu perfil</div>
+          <button 
+            onClick={() => setView("perfil")}
+            className="w-full bg-orange-600 text-white py-2 rounded-md font-semibold text-sm"
+          >
+            Ir a mi perfil
+          </button>
         </div>
       )}
 
@@ -696,13 +764,13 @@ function AyudantesView({ reservations, onAccept }) {
                         <div className="text-xs bg-green-500/10 text-green-700 px-2 py-1.5 rounded-md font-semibold whitespace-nowrap">
                           ✓ {r.ayudante}
                         </div>
-                      ) : !nombre ? (
+                      ) : !nombreCompleto ? (
                         <div className="text-xs bg-stone-200 text-stone-600 px-2 py-1.5 rounded-md font-semibold whitespace-nowrap">
-                          Ingresa nombre
+                          Completa perfil
                         </div>
                       ) : (
                         <button
-                          onClick={() => onAccept(r.id, nombre)}
+                          onClick={() => setConfirmAccept(r)}
                           className="text-xs bg-teal-500 text-white px-2 py-1.5 rounded-md font-semibold hover:bg-teal-600 active:bg-teal-700 transition-colors whitespace-nowrap"
                         >
                           Aceptar
@@ -715,6 +783,40 @@ function AyudantesView({ reservations, onAccept }) {
             </div>
           </div>
         ))
+      )}
+
+      {confirmAccept && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-sm w-full space-y-4">
+            <div>
+              <h3 className="font-bold text-lg text-stone-900">{confirmAccept.groupName}</h3>
+              <div className="text-sm text-stone-600 mt-1">
+                {confirmAccept.date} • {confirmAccept.time} • {confirmAccept.expectedCount} jugadores
+              </div>
+            </div>
+            <div className="bg-teal-500/10 border border-teal-500/30 rounded-lg p-4 space-y-2">
+              <div className="font-semibold text-teal-700 text-sm">✓ Aceptaste la reservación</div>
+              <div className="text-xs text-teal-600">Debes estar puntual. El campo abrirá 15 minutos antes.</div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmAccept(null)}
+                className="flex-1 bg-stone-100 text-stone-700 py-2 rounded-md font-semibold text-sm"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  onAccept(confirmAccept.id, nombreCompleto);
+                  setConfirmAccept(null);
+                }}
+                className="flex-1 bg-teal-600 text-white py-2 rounded-md font-semibold text-sm hover:bg-teal-700"
+              >
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -994,6 +1096,7 @@ function NuevaReserva({ onCancel, onCreate, initialDate, initialTime }) {
   const [count, setCount] = useState(6);
   const [paymentMode, setPaymentMode] = useState("individual");
   const [depositAmount, setDepositAmount] = useState("");
+  const [ayudantesNecesarios, setAyudantesNecesarios] = useState(1);
 
   function setCountAndNames(n) {
     setCount(Math.max(1, Math.min(60, n)));
@@ -1059,6 +1162,29 @@ function NuevaReserva({ onCancel, onCreate, initialDate, initialTime }) {
           </div>
         </Field>
 
+        <Field label="Ayudantes necesarios">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setAyudantesNecesarios(Math.max(0, ayudantesNecesarios - 1))}
+              className="w-9 h-9 rounded-md bg-stone-100 border border-stone-200 font-bold"
+            >
+              −
+            </button>
+            <input
+              type="number"
+              value={ayudantesNecesarios}
+              onChange={(e) => setAyudantesNecesarios(Math.max(0, parseInt(e.target.value) || 0))}
+              className="w-16 text-center bg-stone-100 border border-stone-200 rounded-md px-2 py-2 text-base outline-none"
+            />
+            <button
+              onClick={() => setAyudantesNecesarios(ayudantesNecesarios + 1)}
+              className="w-9 h-9 rounded-md bg-stone-100 border border-stone-200 font-bold"
+            >
+              +
+            </button>
+          </div>
+        </Field>
+
         <Field label="Cobro">
           <div className="flex gap-2">
             <ToggleBtn active={paymentMode === "individual"} onClick={() => setPaymentMode("individual")}>
@@ -1093,7 +1219,7 @@ function NuevaReserva({ onCancel, onCreate, initialDate, initialTime }) {
 
         <button
           onClick={() =>
-            onCreate({ groupName, date, time, count, paymentMode, depositAmount: Number(depositAmount) || 0 })
+            onCreate({ groupName, date, time, count, paymentMode, depositAmount: Number(depositAmount) || 0, ayudantesNecesarios })
           }
           className="w-full bg-orange-600 hover:bg-orange-500 text-stone-50 font-bold rounded-lg py-3"
         >
