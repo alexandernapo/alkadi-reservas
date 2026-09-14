@@ -112,6 +112,8 @@ function exampleReservations() {
     groupPaid: !!opts.groupPaid,
     status: opts.cancelled ? "cancelada" : "activa",
     createdAt: Date.now(),
+    ayudante: opts.ayudante || null,
+    ayudanteAcceptedAt: opts.ayudanteAcceptedAt || null,
     players:
       opts.players ||
       (opts.empty
@@ -223,10 +225,12 @@ async function sb(path, options = {}) {
 }
 
 function App() {
+  const params = new URLSearchParams(window.location.search);
+  const role = params.get("role"); // "ayudante" para vista de ayudantes
   const [reservations, setReservations] = useState(null);
   const [favorites, setFavorites] = useState([]);
   const [expenses, setExpenses] = useState([]);
-  const [view, setView] = useState("inicio"); // inicio | lista | nueva | detalle | reporte | semana | favoritos | gastos
+  const [view, setView] = useState(role === "ayudante" ? "ayudantes" : "inicio"); // inicio | lista | nueva | detalle | reporte | semana | favoritos | gastos | ayudantes
   const [activeId, setActiveId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState(null);
@@ -414,6 +418,8 @@ function App() {
       status: "activa",
       deposit: data.depositAmount > 0 ? { amount: data.depositAmount, status: "pendiente" } : null,
       createdAt: Date.now(),
+      ayudante: null, // nombre del ayudante que aceptó
+      ayudanteAcceptedAt: null, // timestamp cuando aceptó
     };
     persist([r, ...reservations]);
     setActiveId(r.id);
@@ -430,11 +436,11 @@ function App() {
 
   return (
     <div className="min-h-screen bg-stone-50 text-stone-900 font-sans">
-      {view !== "inicio" && <Header saving={saving} view={view} setView={setView} />}
+      {view !== "inicio" && view !== "ayudantes" && <Header saving={saving} view={view} setView={setView} />}
       {view === "inicio" ? (
         <InicioView setView={setView} reservations={reservations} />
       ) : (
-        <main className="max-w-2xl mx-auto px-4 pb-24 pt-4">
+        <main className={`max-w-2xl mx-auto px-4 pb-24 ${view === "ayudantes" ? "pt-6" : "pt-4"}`}>
           {view === "lista" && (
             <ListaReservas
               reservations={reservations}
@@ -488,6 +494,12 @@ function App() {
             <FavoritosView favorites={favorites} onSave={persistFavorites} />
           )}
           {view === "gastos" && <GastosView expenses={expenses} onSave={persistExpenses} />}
+          {view === "ayudantes" && (
+            <AyudantesView
+              reservations={reservations}
+              onAccept={(id) => updateReservation(id, (r) => ({ ...r, ayudante: "Ayudante", ayudanteAcceptedAt: Date.now() }))}
+            />
+          )}
         </main>
       )}
       {loadError && (
@@ -609,6 +621,78 @@ function InicioView({ setView, reservations }) {
             Activar notificaciones de reservas
           </button>
         )}
+    </div>
+  );
+}
+
+function AyudantesView({ reservations, onAccept }) {
+  const active = reservations.filter((r) => r.status !== "cancelada");
+  const today = todayStr();
+  const futureReservas = active.filter((r) => r.date >= today).sort((a, b) => {
+    const dateCompare = a.date.localeCompare(b.date);
+    return dateCompare !== 0 ? dateCompare : a.time.localeCompare(b.time);
+  });
+
+  // Agrupar por fecha
+  const grouped = {};
+  futureReservas.forEach((r) => {
+    if (!grouped[r.date]) grouped[r.date] = [];
+    grouped[r.date].push(r);
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-teal-500/10 border border-teal-500/40 rounded-lg p-4 text-center">
+        <div className="text-teal-600 font-bold text-lg">Reservaciones disponibles</div>
+        <div className="text-sm text-stone-600 mt-1">{futureReservas.length} juego{futureReservas.length !== 1 ? "s" : ""}</div>
+      </div>
+
+      {futureReservas.length === 0 ? (
+        <div className="text-center py-12 text-stone-500">
+          No hay reservaciones disponibles
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {Object.entries(grouped).map(([date, reservas]) => (
+            <div key={date}>
+              <div className="text-sm font-bold text-stone-600 mb-3 px-1">
+                {date === today ? "Hoy" : new Date(date).toLocaleDateString("es-ES", { weekday: "short", month: "short", day: "numeric" })}
+              </div>
+              <div className="space-y-3">
+                {reservas.map((r) => (
+            <div
+              key={r.id}
+              className="border border-stone-200 rounded-lg p-4 bg-white hover:shadow-md transition-shadow"
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <div className="font-bold text-stone-900">{r.groupName}</div>
+                  <div className="text-sm text-stone-600 mt-1">
+                    {r.time} • {r.expectedCount} jugadores
+                  </div>
+                </div>
+                <div className="text-right">
+                  {r.ayudante ? (
+                    <div className="text-sm bg-green-500/10 text-green-700 px-3 py-1.5 rounded-md font-semibold">
+                      ✓ Asignado
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => onAccept(r.id)}
+                      className="text-sm bg-teal-500 text-white px-3 py-1.5 rounded-md font-semibold hover:bg-teal-600 active:bg-teal-700 transition-colors"
+                    >
+                      Aceptar
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+              ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
