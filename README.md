@@ -1,61 +1,40 @@
-# Alkadi Paintball - Control de campo
+# Alkadi Paintball - versión de un solo archivo
 
-## Pasos para publicarlo gratis
+Esta versión NO necesita Node.js, npm, ni ningún programa instalado para
+hacer cambios. Todo el código de la app vive en `index.html`, y puedes
+editarlo directamente desde el editor web de GitHub (el lapicito ✏️ que
+aparece al ver el archivo en GitHub.com).
 
-### 1. Instala Node.js
-Descarga e instala desde https://nodejs.org (elige la versión LTS). Solo una vez.
+## Archivos
+- `index.html` — toda la aplicación (esto es lo único que normalmente vas
+  a tocar cuando pidas un cambio).
+- `manifest.webmanifest` — datos de la app instalable (nombre, ícono).
+- `sw.js` — recibe las notificaciones push aunque la app esté cerrada.
+- `icon-192.png`, `icon-512.png`, `apple-touch-icon.png` — íconos.
+- `vercel.json` — le dice a Vercel que NO hay que compilar nada, solo
+  servir los archivos tal cual.
 
-### 2. Prueba que funcione en tu computadora
-Abre una terminal dentro de esta carpeta y corre:
+## Cómo reemplazar tu proyecto actual
 
-    npm install
-    npm run dev
+1. Entra a tu repositorio en GitHub (`github.com/alexandernapo/alkadi-reservas`).
+2. Borra los archivos viejos: `src/`, `vite.config.js`, `package.json`,
+   `package-lock.json`, `postcss.config.js`, `tailwind.config.js`, el
+   `index.html` viejo, y la carpeta `public/` (sus íconos ya vienen aquí
+   sueltos, en la raíz).
+   - Puedes hacerlo seleccionando cada archivo/carpeta en GitHub y
+     usando la opción de eliminar, o simplemente subiendo los archivos
+     nuevos encima y borrando después los que sobren.
+3. Sube (arrastra) todos los archivos de este paquete a la raíz del
+   repositorio ("Add file" → "Upload files" en GitHub).
+4. Confirma los cambios ("Commit changes").
+5. En Vercel: entra al proyecto → **Settings** → **Build and Deployment**
+   → cambia **Framework Preset** a "Other", deja **Build Command** y
+   **Output Directory** vacíos (o pon "." en Output Directory). Guarda.
+6. Vercel vuelve a publicar solo. Tu enlace (`alkadi-reservas.vercel.app`)
+   sigue siendo el mismo.
 
-Te dará un enlace tipo http://localhost:5173 — ábrelo en el navegador para confirmar que se ve bien.
-
-### 3. Sube el proyecto a GitHub
-1. Crea una cuenta gratis en https://github.com si no tienes.
-2. Crea un repositorio nuevo (puede ser privado), por ejemplo "alkadi-reservas".
-3. En la terminal, dentro de esta carpeta:
-
-       git init
-       git add .
-       git commit -m "primera version"
-       git branch -M main
-       git remote add origin https://github.com/TU-USUARIO/alkadi-reservas.git
-       git push -u origin main
-
-### 4. Publica en Vercel (gratis)
-1. Crea una cuenta en https://vercel.com usando tu cuenta de GitHub (un clic).
-2. Dale "Add New Project" y elige el repositorio "alkadi-reservas".
-3. Deja todo por defecto y dale "Deploy".
-4. En 1-2 minutos te da un enlace propio, por ejemplo "alkadi-reservas.vercel.app". Ese es tu link para siempre.
-
-Cada vez que quieras actualizar la app en el futuro, solo repites:
-
-    git add .
-    git commit -m "cambios"
-    git push
-
-Vercel la vuelve a publicar sola en segundos.
-
-## Notas
-- Ya está conectado a tu base de datos de Supabase. No necesitas hacer nada más ahí.
-- Si tu Supabase todavía no tiene la tabla `app_data`, corre este SQL una vez en el SQL Editor de Supabase:
-
-```sql
-create table app_data (
-  id text primary key,
-  data jsonb not null,
-  updated_at timestamptz default now()
-);
-
-alter table app_data enable row level security;
-
-create policy "allow all with anon key"
-on app_data
-for all
-to anon
-using (true)
-with check (true);
-```
+## Cómo hacer cambios después de esto
+Cuando quieras un cambio, en vez de mandarte un `App.jsx` para reemplazar
+con `npm`/`git`, te voy a mandar el bloque de código exacto para pegar
+en `index.html` desde el editor de GitHub — sin instalar nada, ni en tu
+computadora ni en tu celular.
