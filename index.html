@@ -434,6 +434,13 @@ function App() {
   }
 
   if (role === "ayudante") {
+    if (reservations === null) {
+      return (
+        <div className="min-h-screen bg-stone-50 flex items-center justify-center">
+          <div className="text-orange-600 font-mono text-base tracking-widest animate-pulse">CARGANDO...</div>
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen bg-stone-50 text-stone-900 font-sans">
         <main className="max-w-2xl mx-auto px-4 pb-24 pt-6">
