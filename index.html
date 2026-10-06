@@ -497,6 +497,9 @@ function App() {
             <FavoritosView favorites={favorites} onSave={persistFavorites} />
           )}
           {view === "gastos" && <GastosView expenses={expenses} onSave={persistExpenses} />}
+          {view === "ranking" && (
+            <RankingView equipos={equiposRanking} onUpdate={setEquiposRanking} />
+          )}
           {view === "ayudantes" && (
             <AyudantesView
               reservations={reservations}
@@ -823,6 +826,160 @@ function AyudantesView({ reservations, onAccept }) {
 }
 
 
+function RankingView({ equipos, onUpdate }) {
+  const [nombreNuevo, setNombreNuevo] = React.useState('');
+  const [categoriaNueva, setCategoriaNueva] = React.useState(5);
+  const [showForm, setShowForm] = React.useState(false);
+
+  const CATEGORIAS = [
+    { id: 5, nombre: "Rookie", color: "stone", icon: "🌱" },
+    { id: 4, nombre: "Rising Star", color: "blue", icon: "⭐" },
+    { id: 3, nombre: "Challenger", color: "purple", icon: "⚡" },
+    { id: 2, nombre: "Elite", color: "amber", icon: "👑" },
+    { id: 1, nombre: "Legend", color: "red", icon: "🔥" },
+  ];
+
+  function agregarEquipo() {
+    if (!nombreNuevo.trim()) return;
+    const nuevoEquipo = {
+      id: Date.now(),
+      nombre: nombreNuevo,
+      categoria: categoriaNueva,
+      puesto: (equipos.filter(e => e.categoria === categoriaNueva).length || 0) + 1,
+    };
+    onUpdate([...equipos, nuevoEquipo]);
+    setNombreNuevo('');
+    setCategoriaNueva(5);
+    setShowForm(false);
+  }
+
+  function eliminarEquipo(id) {
+    onUpdate(equipos.filter(e => e.id !== id));
+  }
+
+  function retarEquipo(equipoId, direccion) {
+    const nuevoEquipos = equipos.map(e => e);
+    const equipo = nuevoEquipos.find(e => e.id === equipoId);
+    if (!equipo) return;
+
+    const equiposEnCategoria = nuevoEquipos
+      .filter(e => e.categoria === equipo.categoria)
+      .sort((a, b) => a.puesto - b.puesto);
+
+    if (direccion === 'arriba' && equipo.puesto === 1) return;
+    if (direccion === 'abajo' && equipo.puesto === equiposEnCategoria.length) return;
+
+    equiposEnCategoria.forEach(e => {
+      if (e.id === equipoId) {
+        e.puesto = e.puesto + (direccion === 'arriba' ? -1 : 1);
+      } else if (e.puesto === equipo.puesto + (direccion === 'arriba' ? -1 : 1)) {
+        e.puesto = e.puesto + (direccion === 'arriba' ? 1 : -1);
+      }
+    });
+    onUpdate(nuevoEquipos);
+  }
+
+  const getColors = (cat) => {
+    const bgMap = {
+      stone: 'bg-stone-50', blue: 'bg-blue-50', purple: 'bg-purple-50',
+      amber: 'bg-amber-50', red: 'bg-red-50'
+    };
+    const borderMap = {
+      stone: 'border-stone-300', blue: 'border-blue-300', purple: 'border-purple-300',
+      amber: 'border-amber-300', red: 'border-red-300'
+    };
+    const textMap = {
+      stone: 'text-stone-700', blue: 'text-blue-700', purple: 'text-purple-700',
+      amber: 'text-amber-700', red: 'text-red-700'
+    };
+    return { bg: bgMap[cat.color], border: borderMap[cat.color], text: textMap[cat.color] };
+  };
+
+  return (
+    <div className="pt-2">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-black text-2xl">Ranking de equipos</h2>
+        <button
+          onClick={() => setShowForm(!showForm)}
+          className="px-3 py-2 bg-orange-600 text-white rounded-md font-bold text-sm hover:bg-orange-700"
+        >
+          {showForm ? 'Cancelar' : '+ Equipo'}
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="bg-white border border-stone-200 rounded-lg p-4 mb-6 space-y-3">
+          <input
+            type="text"
+            value={nombreNuevo}
+            onChange={(e) => setNombreNuevo(e.target.value)}
+            placeholder="Nombre del equipo"
+            className="w-full px-3 py-2 border border-stone-200 rounded-md focus:outline-none focus:border-orange-600"
+          />
+          <div className="space-y-2">
+            {[5,4,3,2,1].map(id => {
+              const cat = CATEGORIAS.find(c => c.id === id);
+              return (
+                <label key={id} className="flex items-center gap-3 cursor-pointer">
+                  <input type="radio" value={id} checked={categoriaNueva === id}
+                    onChange={(e) => setCategoriaNueva(Number(e.target.value))} />
+                  <span>{cat.icon} {cat.nombre}</span>
+                </label>
+              );
+            })}
+          </div>
+          <button
+            onClick={agregarEquipo}
+            disabled={!nombreNuevo.trim()}
+            className="w-full bg-teal-600 text-white py-2 rounded-md font-bold disabled:opacity-50"
+          >
+            Crear
+          </button>
+        </div>
+      )}
+
+      <div className="space-y-6">
+        {CATEGORIAS.map(cat => {
+          const equiposCat = equipos.filter(e => e.categoria === cat.id).sort((a, b) => a.puesto - b.puesto);
+          const colors = getColors(cat);
+          return (
+            <div key={cat.id} className={`rounded-lg border-2 ${colors.border} ${colors.bg} p-4`}>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-2xl">{cat.icon}</span>
+                <h3 className={`font-bold text-lg ${colors.text}`}>{cat.nombre}</h3>
+                <span className="text-sm text-stone-600">({equiposCat.length})</span>
+              </div>
+              {equiposCat.length === 0 ? (
+                <div className="text-center py-6 text-stone-500 text-sm">Sin equipos</div>
+              ) : (
+                <div className="space-y-2">
+                  {equiposCat.map((eq) => (
+                    <div key={eq.id} className="flex items-center justify-between bg-white rounded p-2 border border-stone-200">
+                      <div className="flex items-center gap-3 flex-1">
+                        <div className={`font-bold w-6 text-center ${colors.text}`}>#{eq.puesto}</div>
+                        <span className="font-bold text-stone-900">{eq.nombre}</span>
+                      </div>
+                      <div className="flex gap-1">
+                        {eq.puesto > 1 && (
+                          <button onClick={() => retarEquipo(eq.id, 'arriba')} className="p-1 text-teal-600 hover:bg-teal-50 rounded">↑</button>
+                        )}
+                        {eq.puesto < equiposCat.length && (
+                          <button onClick={() => retarEquipo(eq.id, 'abajo')} className="p-1 text-stone-600 hover:bg-stone-100 rounded">↓</button>
+                        )}
+                        <button onClick={() => eliminarEquipo(eq.id)} className="p-1 text-red-600 hover:bg-red-50 rounded">✕</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function NavButton({ color, icon, label, sub, onClick }) {
   const styles =
     color === "teal"
@@ -903,6 +1060,15 @@ function Header({ saving, view, setView }) {
             }`}
           >
             <Receipt size={16} />
+          </button>
+          <button
+            onClick={() => setView("ranking")}
+            className={`text-sm px-2.5 py-1.5 rounded-md font-medium ${
+              view === "ranking" ? "bg-orange-600 text-stone-50" : "text-stone-600"
+            }`}
+            title="Ranking de equipos"
+          >
+            🏆
           </button>
         </div>
       </div>
