@@ -617,6 +617,13 @@ function InicioView({ setView, reservations }) {
           sub="Balitas, aire, ayudante, transporte y más"
           onClick={() => setView("gastos")}
         />
+        <NavButton
+          color="orange"
+          icon="🏆"
+          label="Ranking de Equipos"
+          sub="Leyendas, élite, desafiantes, estrellas y rookies"
+          onClick={() => setView("ranking")}
+        />
       </div>
 
       {(hoy > 0 || manana > 0 || proximos5 > 0) && (
@@ -853,11 +860,11 @@ function RankingView({ equipos, onUpdate }) {
   const [showForm, setShowForm] = React.useState(false);
 
   const CATEGORIAS = [
-    { id: 5, nombre: "Rookie", color: "bg-stone-50", border: "border-stone-300", text: "text-stone-700", icon: "🌱" },
-    { id: 4, nombre: "Rising Star", color: "bg-blue-50", border: "border-blue-300", text: "text-blue-700", icon: "⭐" },
-    { id: 3, nombre: "Challenger", color: "bg-purple-50", border: "border-purple-300", text: "text-purple-700", icon: "⚡" },
-    { id: 2, nombre: "Elite", color: "bg-amber-50", border: "border-amber-300", text: "text-amber-700", icon: "👑" },
     { id: 1, nombre: "Legend", color: "bg-red-50", border: "border-red-300", text: "text-red-700", icon: "🔥" },
+    { id: 2, nombre: "Elite", color: "bg-amber-50", border: "border-amber-300", text: "text-amber-700", icon: "👑" },
+    { id: 3, nombre: "Challenger", color: "bg-purple-50", border: "border-purple-300", text: "text-purple-700", icon: "⚡" },
+    { id: 4, nombre: "Rising Star", color: "bg-blue-50", border: "border-blue-300", text: "text-blue-700", icon: "⭐" },
+    { id: 5, nombre: "Rookie", color: "bg-stone-50", border: "border-stone-300", text: "text-stone-700", icon: "🌱" },
   ];
 
   function agregarEquipo() {
