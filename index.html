@@ -855,11 +855,16 @@ function AyudantesView({ reservations, onAccept }) {
 
 
 function RankingView({ equipos, onUpdate }) {
+  const params = new URLSearchParams(window.location.search);
+  const modoLectura = params.get('view') === 'share';
+  const equipoVer = params.get('team');
+
   const [nombreNuevo, setNombreNuevo] = React.useState('');
   const [categoriaNueva, setCategoriaNueva] = React.useState(1);
   const [showForm, setShowForm] = React.useState(false);
   const [equipoSeleccionado, setEquipoSeleccionado] = React.useState(null);
   const [editando, setEditando] = React.useState(false);
+  const [copiado, setCopiado] = React.useState(false);
 
   const CATEGORIAS = [
     { id: 1, nombre: "Legend", bgGrad: "from-red-600 to-red-700", icon: "🔥", color: "red" },
@@ -880,16 +885,30 @@ function RankingView({ equipos, onUpdate }) {
     { key: "comunicacion", label: "Comunicación", icon: "📢" },
   ];
 
+  function generarAtributosAleatorios(categoria) {
+    const rangos = {
+      1: { min: 75, max: 95 }, // Legend
+      2: { min: 65, max: 85 }, // Elite
+      3: { min: 50, max: 70 }, // Challenger
+      4: { min: 40, max: 60 }, // Rising Star
+      5: { min: 25, max: 45 }, // Rookie
+    };
+    const rango = rangos[categoria] || { min: 40, max: 60 };
+    const attrs = {};
+    ATRIBUTOS.forEach(a => {
+      attrs[a.key] = Math.floor(Math.random() * (rango.max - rango.min + 1)) + rango.min;
+    });
+    return attrs;
+  }
+
   function crearEquipoConAtributos(nombre, categoria) {
     const countCat = equipos.filter(e => e.categoria === categoria).length;
-    const attrs = {};
-    ATRIBUTOS.forEach(a => attrs[a.key] = 50);
     return {
       id: Date.now(),
       nombre,
       categoria,
       puesto: countCat + 1,
-      atributos: attrs
+      atributos: generarAtributosAleatorios(categoria)
     };
   }
 
@@ -921,6 +940,46 @@ function RankingView({ equipos, onUpdate }) {
       otro.puesto = temp;
     }
     onUpdate(actualizado);
+  }
+
+  if (modoLectura && equipoVer) {
+    const equipo = equipos.find(e => e.nombre === equipoVer);
+    if (!equipo) {
+      return <div className="pt-10 text-center text-stone-500">Equipo no encontrado</div>;
+    }
+    return (
+      <div className="min-h-screen pt-8 pb-20 flex items-center justify-center px-4">
+        <div className="bg-stone-900 rounded-lg max-w-md w-full p-6 text-white space-y-6">
+          <div className="text-center">
+            <h3 className="font-black text-3xl mb-2">{equipo.nombre}</h3>
+            <div className="text-sm text-stone-400">Fortalezas del equipo</div>
+          </div>
+          <div className="space-y-4">
+            {ATRIBUTOS.map(attr => (
+              <div key={attr.key}>
+                <label className="block text-sm font-bold mb-2 flex items-center gap-2">
+                  <span className="text-lg">{attr.icon}</span>
+                  {attr.label}
+                </label>
+                <div className="w-full bg-stone-700 rounded-full h-3 overflow-hidden">
+                  <div
+                    className="bg-gradient-to-r from-orange-500 to-teal-500 h-full transition-all"
+                    style={{ width: `${equipo.atributos[attr.key] || 0}%` }}
+                  />
+                </div>
+                <div className="text-right text-xs text-stone-400 mt-1">{equipo.atributos[attr.key] || 0}%</div>
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={() => window.location.href = window.location.pathname}
+            className="w-full bg-teal-600 text-white py-2 rounded font-bold hover:bg-teal-700"
+          >
+            ← Volver al ranking
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -1090,12 +1149,27 @@ function RankingView({ equipos, onUpdate }) {
                     <div className="text-right text-xs text-stone-400 mt-1">{equipoSeleccionado.atributos[attr.key] || 0}%</div>
                   </div>
                 ))}
-                <button
-                  onClick={() => setEditando(true)}
-                  className="w-full bg-orange-600 text-white py-2 rounded font-bold hover:bg-orange-700 mt-6"
-                >
-                  ✏️ Editar fortalezas
-                </button>
+                <div className="space-y-2 mt-6">
+                  {!modoLectura && (
+                    <button
+                      onClick={() => setEditando(true)}
+                      className="w-full bg-orange-600 text-white py-2 rounded font-bold hover:bg-orange-700"
+                    >
+                      ✏️ Editar fortalezas
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      const shareUrl = `${window.location.origin}${window.location.pathname}?view=share&team=${encodeURIComponent(equipoSeleccionado.nombre)}`;
+                      navigator.clipboard.writeText(shareUrl);
+                      setCopiado(true);
+                      setTimeout(() => setCopiado(false), 2000);
+                    }}
+                    className={`w-full py-2 rounded font-bold transition-all ${copiado ? 'bg-teal-600 text-white' : 'bg-stone-700 text-white hover:bg-stone-600'}`}
+                  >
+                    {copiado ? '✓ Link copiado' : '🔗 Compartir equipo'}
+                  </button>
+                </div>
               </div>
             )}
           </div>
