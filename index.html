@@ -875,6 +875,7 @@ function RankingView({ equipos: equiposRaw, onUpdate }) {
   const [equipoSeleccionado, setEquipoSeleccionado] = React.useState(null);
   const [editando, setEditando] = React.useState(false);
   const [copiado, setCopiado] = React.useState(false);
+  const [copiadoId, setCopiadoId] = React.useState(null);
 
   const CATEGORIAS = [
     { id: 1, nombre: "Legend", bgGrad: "from-red-600 to-red-700", icon: "🔥", color: "red" },
@@ -946,6 +947,41 @@ function RankingView({ equipos: equiposRaw, onUpdate }) {
     onUpdate(actualizado);
   }
 
+  // dir = -1 sube, +1 baja. Si ya es el primero/último de su categoría, cambia de categoría.
+  function moverEquipo(equipoId, dir) {
+    const eq = equipos.find((e) => e.id === equipoId);
+    if (!eq) return;
+    const grupo = equipos.filter((e) => e.categoria === eq.categoria).sort((a, b) => a.puesto - b.puesto);
+    const idx = grupo.findIndex((e) => e.id === equipoId);
+    const vecino = grupo[idx + dir];
+    if (vecino) {
+      onUpdate(
+        equipos.map((e) =>
+          e.id === eq.id ? { ...e, puesto: vecino.puesto } : e.id === vecino.id ? { ...e, puesto: eq.puesto } : e
+        )
+      );
+    } else if (dir < 0) {
+      cambiarCategoria(equipoId, -1, false); // sube a la categoría de arriba (queda de último)
+    } else {
+      cambiarCategoria(equipoId, 1, true); // baja a la categoría de abajo (queda de primero)
+    }
+  }
+
+  function copiarLink(nombre, id) {
+    const url = `${window.location.origin}${window.location.pathname}?view=share&team=${encodeURIComponent(nombre)}`;
+    const listo = () => {
+      setCopiadoId(id);
+      setTimeout(() => setCopiadoId(null), 2000);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(listo).catch(() => {
+        window.prompt("Copia este link:", url);
+      });
+    } else {
+      window.prompt("Copia este link:", url);
+    }
+  }
+
   // Reajusta el valor de una fortaleza al rango de otra categoría (mantiene su posición relativa)
   function ajustarARango(valor, catVieja, catNueva) {
     const o = RANGOS_CAT[catVieja] || { min: 40, max: 60 };
@@ -955,7 +991,7 @@ function RankingView({ equipos: equiposRaw, onUpdate }) {
   }
 
   // delta = -1 sube de categoría (hacia Legend), +1 baja (hacia Rookie)
-  function cambiarCategoria(equipoId, delta) {
+  function cambiarCategoria(equipoId, delta, alInicio = false) {
     const eq = equipos.find((e) => e.id === equipoId);
     if (!eq) return;
     const nueva = eq.categoria + delta;
@@ -964,7 +1000,7 @@ function RankingView({ equipos: equiposRaw, onUpdate }) {
     ATRIBUTOS.forEach((a) => {
       atributos[a.key] = ajustarARango(eq.atributos[a.key], eq.categoria, nueva);
     });
-    const ultimo = equipos.filter((e) => e.categoria === nueva).length + 1;
+    const ultimo = alInicio ? 0.5 : equipos.filter((e) => e.categoria === nueva).length + 1;
     let lista = equipos.map((e) => (e.id === equipoId ? { ...e, categoria: nueva, atributos, puesto: ultimo } : e));
     // renumerar puestos de cada categoría
     lista = lista.map((e) => {
@@ -1103,20 +1139,24 @@ function RankingView({ equipos: equiposRaw, onUpdate }) {
                       <div
                         key={eq.id}
                         onClick={() => setEquipoSeleccionado(eq)}
-                        className={`bg-gradient-to-r ${bgColors[cat.color]} text-white rounded-lg p-4 flex items-center justify-between cursor-pointer hover:shadow-lg transition-shadow`}
+                        className={`bg-gradient-to-r ${bgColors[cat.color]} text-white rounded-lg p-4 flex items-center justify-between cursor-pointer hover:shadow-lg transition-shadow ${idx === 0 ? 'ring-4 ring-yellow-300 shadow-xl' : ''}`}
                       >
                         <div className="flex items-center gap-3 flex-1">
                           <div className="text-xl font-bold">{posiciones[idx] || `${idx + 1}`}</div>
                           <div>
                             <div className="font-bold text-base">{eq.nombre}</div>
-                            <div className="text-xs opacity-80">Ver fortalezas →</div>
+                            <div className="text-xs opacity-80">{idx === 0 ? "👑 N°1 de " + cat.nombre + " · " : ""}Ver fortalezas →</div>
                           </div>
                         </div>
                         <div className="flex gap-2">
-                          {eq.puesto > 1 && (
-                            <button onClick={(e) => { e.stopPropagation(); subirEquipo(eq.id); }}
-                              className="px-3 py-1 bg-white/20 hover:bg-white/30 rounded text-sm font-bold">↑</button>
-                          )}
+                          <button onClick={(e) => { e.stopPropagation(); moverEquipo(eq.id, -1); }}
+                            disabled={cat.id === 1 && idx === 0}
+                            className="px-3 py-1 bg-white/20 hover:bg-white/30 rounded text-sm font-bold disabled:opacity-30">↑</button>
+                          <button onClick={(e) => { e.stopPropagation(); moverEquipo(eq.id, 1); }}
+                            disabled={cat.id === 5 && idx === equiposCat.length - 1}
+                            className="px-3 py-1 bg-white/20 hover:bg-white/30 rounded text-sm font-bold disabled:opacity-30">↓</button>
+                          <button onClick={(e) => { e.stopPropagation(); copiarLink(eq.nombre, eq.id); }}
+                            className="px-3 py-1 bg-white/20 hover:bg-white/30 rounded text-sm font-bold">{copiadoId === eq.id ? "✓" : "🔗"}</button>
                           <button onClick={(e) => { e.stopPropagation(); eliminarEquipo(eq.id); }}
                             className="px-3 py-1 bg-white/20 hover:bg-red-500/50 rounded text-sm font-bold">✕</button>
                         </div>
