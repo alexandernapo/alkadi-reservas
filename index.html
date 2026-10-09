@@ -233,7 +233,7 @@ function App() {
   const [favorites, setFavorites] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [equiposRanking, setEquiposRanking] = useState([]);
-  const [view, setView] = useState(role === "ayudante" ? "ayudantes" : "inicio"); // inicio | lista | nueva | detalle | reporte | semana | favoritos | gastos | ranking | ayudantes
+  const [view, setView] = useState(role === "ayudante" ? "ayudantes" : params.get("view") === "share" ? "ranking" : "inicio"); // inicio | lista | nueva | detalle | reporte | semana | favoritos | gastos | ranking | ayudantes
   const [activeId, setActiveId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState(null);
@@ -854,7 +854,17 @@ function AyudantesView({ reservations, onAccept }) {
 }
 
 
-function RankingView({ equipos, onUpdate }) {
+const RANGOS_CAT = {
+  1: { min: 75, max: 95 }, // Legend
+  2: { min: 65, max: 85 }, // Elite
+  3: { min: 50, max: 70 }, // Challenger
+  4: { min: 40, max: 60 }, // Rising Star
+  5: { min: 25, max: 45 }, // Rookie
+};
+
+function RankingView({ equipos: equiposRaw, onUpdate }) {
+  // Equipos antiguos pueden no tener "atributos": eso causaba pantalla en blanco.
+  const equipos = (equiposRaw || []).map((e) => ({ ...e, atributos: e.atributos || {} }));
   const params = new URLSearchParams(window.location.search);
   const modoLectura = params.get('view') === 'share';
   const equipoVer = params.get('team');
@@ -886,13 +896,7 @@ function RankingView({ equipos, onUpdate }) {
   ];
 
   function generarAtributosAleatorios(categoria) {
-    const rangos = {
-      1: { min: 75, max: 95 }, // Legend
-      2: { min: 65, max: 85 }, // Elite
-      3: { min: 50, max: 70 }, // Challenger
-      4: { min: 40, max: 60 }, // Rising Star
-      5: { min: 25, max: 45 }, // Rookie
-    };
+    const rangos = RANGOS_CAT;
     const rango = rangos[categoria] || { min: 40, max: 60 };
     const attrs = {};
     ATRIBUTOS.forEach(a => {
@@ -941,6 +945,49 @@ function RankingView({ equipos, onUpdate }) {
     }
     onUpdate(actualizado);
   }
+
+  // Reajusta el valor de una fortaleza al rango de otra categoría (mantiene su posición relativa)
+  function ajustarARango(valor, catVieja, catNueva) {
+    const o = RANGOS_CAT[catVieja] || { min: 40, max: 60 };
+    const n = RANGOS_CAT[catNueva] || { min: 40, max: 60 };
+    const rel = Math.min(1, Math.max(0, ((valor || 0) - o.min) / (o.max - o.min)));
+    return Math.round(n.min + rel * (n.max - n.min));
+  }
+
+  // delta = -1 sube de categoría (hacia Legend), +1 baja (hacia Rookie)
+  function cambiarCategoria(equipoId, delta) {
+    const eq = equipos.find((e) => e.id === equipoId);
+    if (!eq) return;
+    const nueva = eq.categoria + delta;
+    if (nueva < 1 || nueva > 5) return;
+    const atributos = {};
+    ATRIBUTOS.forEach((a) => {
+      atributos[a.key] = ajustarARango(eq.atributos[a.key], eq.categoria, nueva);
+    });
+    const ultimo = equipos.filter((e) => e.categoria === nueva).length + 1;
+    let lista = equipos.map((e) => (e.id === equipoId ? { ...e, categoria: nueva, atributos, puesto: ultimo } : e));
+    // renumerar puestos de cada categoría
+    lista = lista.map((e) => {
+      const orden = lista.filter((x) => x.categoria === e.categoria).sort((a, b) => a.puesto - b.puesto);
+      return { ...e, puesto: orden.findIndex((x) => x.id === e.id) + 1 };
+    });
+    onUpdate(lista);
+    setEquipoSeleccionado(lista.find((e) => e.id === equipoId));
+    setEditando(false);
+  }
+
+  // Si hay equipos sin fortalezas, se generan y se guardan una sola vez
+  React.useEffect(() => {
+    if ((equiposRaw || []).some((e) => !e.atributos || Object.keys(e.atributos).length === 0)) {
+      onUpdate(
+        (equiposRaw || []).map((e) =>
+          e.atributos && Object.keys(e.atributos).length > 0
+            ? e
+            : { ...e, atributos: generarAtributosAleatorios(e.categoria || 5) }
+        )
+      );
+    }
+  }, [equiposRaw]);
 
   if (modoLectura && equipoVer) {
     const equipo = equipos.find(e => e.nombre === equipoVer);
@@ -1087,7 +1134,12 @@ function RankingView({ equipos, onUpdate }) {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-stone-900 rounded-lg max-w-md w-full max-h-[80vh] overflow-y-auto p-6 text-white">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="font-black text-2xl">{equipoSeleccionado.nombre}</h3>
+              <div>
+                <h3 className="font-black text-2xl">{equipoSeleccionado.nombre}</h3>
+                <div className="text-xs text-stone-400">
+                  {CATEGORIAS[equipoSeleccionado.categoria - 1]?.icon} {CATEGORIAS[equipoSeleccionado.categoria - 1]?.nombre}
+                </div>
+              </div>
               <button onClick={() => { setEquipoSeleccionado(null); setEditando(false); }}
                 className="text-2xl hover:opacity-70">✕</button>
             </div>
@@ -1150,6 +1202,28 @@ function RankingView({ equipos, onUpdate }) {
                   </div>
                 ))}
                 <div className="space-y-2 mt-6">
+                  {!modoLectura && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => cambiarCategoria(equipoSeleccionado.id, -1)}
+                        disabled={equipoSeleccionado.categoria <= 1}
+                        className="bg-teal-600 text-white py-2 rounded font-bold text-sm hover:bg-teal-700 disabled:opacity-30"
+                      >
+                        {equipoSeleccionado.categoria > 1
+                          ? `⬆️ Subir a ${CATEGORIAS[equipoSeleccionado.categoria - 2].nombre}`
+                          : "👑 Categoría máxima"}
+                      </button>
+                      <button
+                        onClick={() => cambiarCategoria(equipoSeleccionado.id, 1)}
+                        disabled={equipoSeleccionado.categoria >= 5}
+                        className="bg-stone-700 text-white py-2 rounded font-bold text-sm hover:bg-stone-600 disabled:opacity-30"
+                      >
+                        {equipoSeleccionado.categoria < 5
+                          ? `⬇️ Bajar a ${CATEGORIAS[equipoSeleccionado.categoria].nombre}`
+                          : "Categoría mínima"}
+                      </button>
+                    </div>
+                  )}
                   {!modoLectura && (
                     <button
                       onClick={() => setEditando(true)}
