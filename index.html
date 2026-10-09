@@ -229,6 +229,7 @@ async function sb(path, options = {}) {
 function App() {
   const params = new URLSearchParams(window.location.search);
   const role = params.get("role"); // "ayudante" para vista de ayudantes
+  const isShare = params.get("view") === "share"; // link público: solo ranking, solo lectura
   const [reservations, setReservations] = useState(null);
   const [favorites, setFavorites] = useState([]);
   const [expenses, setExpenses] = useState([]);
@@ -242,6 +243,18 @@ function App() {
 
   useEffect(() => {
     (async () => {
+      if (isShare) {
+        try {
+          const rankingRows = await withRetries(() => sb("/app_data?id=eq.ranking&select=data"));
+          if (rankingRows && rankingRows.length > 0 && Array.isArray(rankingRows[0].data)) {
+            setEquiposRanking(rankingRows[0].data);
+          }
+        } catch (e) {
+          // sin datos
+        }
+        setReservations([]); // no se cargan reservas en el link público
+        return;
+      }
       let loaded = [];
       try {
         const rows = await withRetries(() => sb("/app_data?id=eq.reservations&select=data"));
@@ -329,7 +342,7 @@ function App() {
   const latestDataRef = useRef(null);
 
   useEffect(() => {
-    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+    if (!isShare && typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
       subscribeToPush();
     }
   }, []);
@@ -338,7 +351,7 @@ function App() {
   const notifiedRef = useRef(new Set());
 
   useEffect(() => {
-    if (!reservations || typeof window === "undefined" || !("Notification" in window)) return;
+    if (isShare || !reservations || typeof window === "undefined" || !("Notification" in window)) return;
 
     notifTimersRef.current.forEach((id) => clearTimeout(id));
     notifTimersRef.current = [];
@@ -454,6 +467,16 @@ function App() {
     return (
       <div className="min-h-screen bg-stone-50 flex items-center justify-center">
         <div className="text-orange-600 font-mono text-base tracking-widest animate-pulse">CARGANDO CAMPO...</div>
+      </div>
+    );
+  }
+
+  if (isShare) {
+    return (
+      <div className="min-h-screen bg-stone-50 text-stone-900 font-sans">
+        <main className="max-w-2xl mx-auto px-4 pb-24 pt-6">
+          <RankingView equipos={equiposRanking} onUpdate={() => {}} />
+        </main>
       </div>
     );
   }
@@ -968,7 +991,7 @@ function RankingView({ equipos: equiposRaw, onUpdate }) {
   }
 
   function copiarLink(nombre, id) {
-    const url = `${window.location.origin}${window.location.pathname}?view=share&team=${encodeURIComponent(nombre)}`;
+    const url = `${window.location.origin}${window.location.pathname}?view=share${nombre ? `&team=${encodeURIComponent(nombre)}` : ""}`;
     const listo = () => {
       setCopiadoId(id);
       setTimeout(() => setCopiadoId(null), 2000);
@@ -1014,7 +1037,7 @@ function RankingView({ equipos: equiposRaw, onUpdate }) {
 
   // Si hay equipos sin fortalezas, se generan y se guardan una sola vez
   React.useEffect(() => {
-    if ((equiposRaw || []).some((e) => !e.atributos || Object.keys(e.atributos).length === 0)) {
+    if (!modoLectura && (equiposRaw || []).some((e) => !e.atributos || Object.keys(e.atributos).length === 0)) {
       onUpdate(
         (equiposRaw || []).map((e) =>
           e.atributos && Object.keys(e.atributos).length > 0
@@ -1025,51 +1048,28 @@ function RankingView({ equipos: equiposRaw, onUpdate }) {
     }
   }, [equiposRaw]);
 
-  if (modoLectura && equipoVer) {
-    const equipo = equipos.find(e => e.nombre === equipoVer);
-    if (!equipo) {
-      return <div className="pt-10 text-center text-stone-500">Equipo no encontrado</div>;
+  // En el link compartido, si trae ?team=..., abre ese equipo una sola vez
+  const abiertoRef = React.useRef(false);
+  React.useEffect(() => {
+    if (modoLectura && equipoVer && !abiertoRef.current && equipos.length > 0) {
+      const eq = equipos.find((e) => e.nombre === equipoVer);
+      if (eq) {
+        abiertoRef.current = true;
+        setEquipoSeleccionado(eq);
+      }
     }
-    return (
-      <div className="min-h-screen pt-8 pb-20 flex items-center justify-center px-4">
-        <div className="bg-stone-900 rounded-lg max-w-md w-full p-6 text-white space-y-6">
-          <div className="text-center">
-            <h3 className="font-black text-3xl mb-2">{equipo.nombre}</h3>
-            <div className="text-sm text-stone-400">Fortalezas del equipo</div>
-          </div>
-          <div className="space-y-4">
-            {ATRIBUTOS.map(attr => (
-              <div key={attr.key}>
-                <label className="block text-sm font-bold mb-2 flex items-center gap-2">
-                  <span className="text-lg">{attr.icon}</span>
-                  {attr.label}
-                </label>
-                <div className="w-full bg-stone-700 rounded-full h-3 overflow-hidden">
-                  <div
-                    className="bg-gradient-to-r from-orange-500 to-teal-500 h-full transition-all"
-                    style={{ width: `${equipo.atributos[attr.key] || 0}%` }}
-                  />
-                </div>
-                <div className="text-right text-xs text-stone-400 mt-1">{equipo.atributos[attr.key] || 0}%</div>
-              </div>
-            ))}
-          </div>
-          <button
-            onClick={() => window.location.href = window.location.pathname}
-            className="w-full bg-teal-600 text-white py-2 rounded font-bold hover:bg-teal-700"
-          >
-            ← Volver al ranking
-          </button>
-        </div>
-      </div>
-    );
-  }
+  }, [equiposRaw]);
 
   return (
     <div className="pt-2 pb-20">
-      <h2 className="font-black text-2xl mb-6">🏆 Ranking de Equipos</h2>
+      {modoLectura && (
+        <div className="flex justify-center mb-2">
+          <img src={LOGO_B64} alt="Alkadi Paintball" className="w-28 h-28 object-contain" />
+        </div>
+      )}
+      <h2 className={`font-black text-2xl mb-6 ${modoLectura ? "text-center" : ""}`}>🏆 Ranking de Equipos</h2>
 
-      {showForm && (
+      {!modoLectura && showForm && (
         <div className="bg-white rounded-lg p-4 mb-6 space-y-3 border border-orange-300">
           <input
             type="text"
@@ -1105,12 +1105,22 @@ function RankingView({ equipos: equiposRaw, onUpdate }) {
         </div>
       )}
 
-      <button
-        onClick={() => setShowForm(!showForm)}
-        className="mb-6 px-4 py-2 bg-orange-600 text-white rounded-lg font-bold hover:bg-orange-700 text-sm"
-      >
-        {showForm ? '✕ Cerrar' : '+ Agregar Equipo'}
-      </button>
+      {!modoLectura && (
+        <div className="flex flex-wrap gap-2 mb-6">
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="px-4 py-2 bg-orange-600 text-white rounded-lg font-bold hover:bg-orange-700 text-sm"
+          >
+            {showForm ? '✕ Cerrar' : '+ Agregar Equipo'}
+          </button>
+          <button
+            onClick={() => copiarLink(null, "all")}
+            className="px-4 py-2 bg-teal-600 text-white rounded-lg font-bold hover:bg-teal-700 text-sm"
+          >
+            {copiadoId === "all" ? "✓ Link copiado" : "🔗 Copiar link del ranking"}
+          </button>
+        </div>
+      )}
 
       <div className="space-y-6">
         {CATEGORIAS.map(cat => {
@@ -1148,6 +1158,7 @@ function RankingView({ equipos: equiposRaw, onUpdate }) {
                             <div className="text-xs opacity-80">{idx === 0 ? "👑 N°1 de " + cat.nombre + " · " : ""}Ver fortalezas →</div>
                           </div>
                         </div>
+                        {!modoLectura && (
                         <div className="flex gap-2">
                           <button onClick={(e) => { e.stopPropagation(); moverEquipo(eq.id, -1); }}
                             disabled={cat.id === 1 && idx === 0}
@@ -1160,6 +1171,7 @@ function RankingView({ equipos: equiposRaw, onUpdate }) {
                           <button onClick={(e) => { e.stopPropagation(); eliminarEquipo(eq.id); }}
                             className="px-3 py-1 bg-white/20 hover:bg-red-500/50 rounded text-sm font-bold">✕</button>
                         </div>
+                        )}
                       </div>
                     );
                   })
@@ -1272,6 +1284,7 @@ function RankingView({ equipos: equiposRaw, onUpdate }) {
                       ✏️ Editar fortalezas
                     </button>
                   )}
+                  {!modoLectura && (
                   <button
                     onClick={() => {
                       const shareUrl = `${window.location.origin}${window.location.pathname}?view=share&team=${encodeURIComponent(equipoSeleccionado.nombre)}`;
@@ -1283,6 +1296,7 @@ function RankingView({ equipos: equiposRaw, onUpdate }) {
                   >
                     {copiado ? '✓ Link copiado' : '🔗 Compartir equipo'}
                   </button>
+                  )}
                 </div>
               </div>
             )}
